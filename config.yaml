@@ -1,0 +1,59 @@
+llm:
+#  provider: anthropic        # openai | anthropic
+#  model: claude-sonnet-4-5
+ provider: openai        # openai 
+ model: gpt-6-luna
+
+small_llm:
+# for small tasks
+ provider: openai        # openai 
+ model: gpt-4o-mini
+
+memory:
+  host: localhost
+  port: 5432
+  database: ai-architect-db
+  summarize_at_tokens: 4000
+  keep_last_messages: 20
+
+postgresql_db_tables:
+ req_spec_table: requirement_specs
+ sizing_spec_table: sizing_specs
+
+vector_store:
+ provider: chroma
+ retrieval_mode: dense  # dense | sparse | hybrid
+
+embeddings:
+ provider: openai             
+ model: text-embedding-3-small
+
+chromadb:
+ persist_dir: .chromadb/
+ collection_name: aws_doc_kb
+
+
+raptor:
+ docs_dir: architectural-ref-patterns/arch-ref-docs
+ chunk_size: 1200
+ chunk_overlap: 100
+ max_levels: 6
+ max_clusters: 10
+ soft_threshold: 0.1
+ max_cluster_chars: 24000
+ embed_batch_size: 64
+ retrieval_summary_top_k: 3
+ retrieval_leaf_top_k: 3
+ retrieval_max_depth: 3
+ retrieval_max_branch_nodes: 18
+ retrieval_branch_width: 3
+ retrieval_max_child_candidates: 256
+ retrieval_log_text_previews: false  # opt in to logging retrieved document text
+
+qdrant:
+ path: .qdrant/          # local on-disk mode; set url to use a server instead
+ url: https://49368fe2-91d7-4084-829a-ce10f7205dbe.us-east-1-1.aws.cloud.qdrant.io
+ collection_name: arch_raptor_kb
+ timeout_seconds: 60      # HTTP client timeout for remote Qdrant
+ upsert_batch_size: 16   # Smaller requests reduce network write timeouts
+ # Set QDRANT_API_KEY in the project .env file or the process environment.

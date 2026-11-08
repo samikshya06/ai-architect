@@ -1,0 +1,9 @@
+https://www.geeksforgeeks.org/system-design/how-uber-finds-nearby-drivers-at-1-million-requests-per-second/
+https://www.geeksforgeeks.org/system-design/how-whatsapp-handles-50-billion-messages-a-day/
+https://www.geeksforgeeks.org/system-design/why-netflix-server-is-so-fast/
+https://www.geeksforgeeks.org/system-design/how-paypal-was-able-to-support-a-billion-transactions-per-day-with-only-8-virtual-machines/
+https://www.geeksforgeeks.org/system-design/airbnb-idempotency-avoiding-double-payments-in-a-distributed-payments-system/
+https://www.geeksforgeeks.org/system-design/how-discord-scaled-to-15-million-users-on-one-server/
+https://www.geeksforgeeks.org/system-design/design-patterns-architecture/
+https://www.uber.com/in/en/blog/uber-cart-assistant/
+https://github.com/Sairyss/system-design-patterns
