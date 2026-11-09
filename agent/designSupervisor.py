@@ -10,10 +10,17 @@ from langchain_core.messages import ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command
 
-from agent.factory import build_capacity_agent, build_component_agent, build_req_agent
+from agent.factory import (
+    build_capacity_agent,
+    build_component_agent,
+    build_composer_agent,
+    build_req_agent,
+)
+from agent.tools.aws_cost_estimator import estimate_aws_cost
+from agent.topology_document import write_topology_document
 from observability.logger import get_logger
 from raptor.retrieval import retrieve_raptor_context
-from schemas import ComponentChoices, RequirementSpec, unknown_references
+from schemas import ComponentChoices, RequirementSpec, TopologyGraph, unknown_references
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -26,7 +33,9 @@ REQUIREMENTS_RECURSION_LIMIT = 25
 
 # Max graph steps for the component agent (doc searches + final structured answer).
 COMPONENT_RECURSION_LIMIT = 25
+COMPOSER_RECURSION_LIMIT = 25
 MAX_VALIDATION_RETRIES = 2
+DESIGN_OUTPUT_DIR = Path(__file__).resolve().parent.parent / "designs"
 
 
 def _close_database() -> None:
@@ -75,13 +84,19 @@ def handle_query(question: str, thread_id: str) -> str:
         # print(sizing_spec_data)
 
         # call to component selection agent
-        handle_component_selection(requirement_spec,capacity_results)
+        design = handle_component_selection(requirement_spec, capacity_results)
 
-        # call to cost estimation agent
+        estimate = estimate_aws_cost(design, capacity_results)
+        print("\nAWS cost estimate (JSON):")
+        print(json.dumps(estimate, indent=2))
 
-        # call to architecture composer agent (include design critic agent to verify)
+        topology = compose_design(requirement_spec, capacity_results, design, estimate)
+        print("\nArchitecture topology (JSON):")
+        print(topology.model_dump_json(indent=2))
+        document_path = write_topology_document(topology, DESIGN_OUTPUT_DIR)
+        print(f"\nArchitecture design document: {document_path}")
         logger.info("Successfully handled query for session %s", thread_id)
-        return spec.model_dump_json(indent=2)
+        return topology.model_dump_json(indent=2)
     except Exception:
         logger.exception("Failed to handle query for session %s", thread_id)
         raise
@@ -149,13 +164,21 @@ def _resolve_kb_references(design, raptor_context, messages):
     aws_urls = set()
     for message in messages:
         if isinstance(message, ToolMessage):
-            if message.name == ComponentChoices.__name__ or message.status == "error":
+            if (
+                message.name == ComponentChoices.__name__
+                or message.status == "error"
+                or str(message.content).startswith("MCP tool error:")
+            ):
                 continue
             content = message.content
         elif isinstance(message, dict) and message.get("role") == "tool":
-            if message.get("name") == ComponentChoices.__name__ or message.get("status") == "error":
-                continue
             content = message.get("content", "")
+            if (
+                message.get("name") == ComponentChoices.__name__
+                or message.get("status") == "error"
+                or str(content).startswith("MCP tool error:")
+            ):
+                continue
         else:
             continue
         for url in re.findall(r"https://[^\s\"'<>\]\\]+", str(content)):
@@ -247,3 +270,76 @@ def handle_component_selection(requirement_spec: dict, capacity_results) -> Comp
     print("\nSelected components (JSON):")
     print(design.model_dump_json(indent=2))
     return design
+
+
+def _topology_input_errors(
+    topology: TopologyGraph, design: ComponentChoices, capacity_results: list[dict]
+) -> list[str]:
+    selected = {component.id: component for component in design.components}
+    referenced = {node.component_id for node in topology.nodes if node.component_id}
+    errors = []
+    for component_id in sorted(selected.keys() - referenced):
+        errors.append(f"missing selected component: {component_id}")
+    for component_id in sorted(referenced - selected.keys()):
+        errors.append(f"unknown selected component: {component_id}")
+    for node in topology.nodes:
+        if node.component_id in selected:
+            component = selected[node.component_id]
+            is_accounting = component.service == "data_transfer"
+            if (node.kind == "accounting") != is_accounting:
+                errors.append(f"incorrect node kind for component: {node.component_id}")
+            if node.service != component.service or node.region != component.region:
+                errors.append(f"incorrect service or region for component: {node.component_id}")
+    metrics = {row["metric"] for row in capacity_results if "metric" in row}
+    for edge in topology.edges:
+        if edge.expected_volume is not None:
+            for metric in edge.expected_volume.capacity_metrics:
+                if metric not in metrics:
+                    errors.append(f"edge {edge.id} references unknown capacity metric: {metric}")
+    return errors
+
+
+def compose_design(
+    requirement_spec: dict,
+    capacity_results: list[dict],
+    design: ComponentChoices,
+    estimate: dict,
+) -> TopologyGraph:
+    """Compose and validate a graph against the exact upstream outputs."""
+    agent = build_composer_agent()
+    messages = [{
+        "role": "user",
+        "content": (
+            "Requirement specification (JSON):\n"
+            f"{json.dumps(requirement_spec, indent=2)}\n\n"
+            "Capacity results (JSON):\n"
+            f"{json.dumps(capacity_results, indent=2)}\n\n"
+            "Selected components (JSON):\n"
+            f"{design.model_dump_json(indent=2)}\n\n"
+            "AWS cost estimate (JSON):\n"
+            f"{json.dumps(estimate, indent=2)}"
+        ),
+    }]
+    for attempt in range(MAX_VALIDATION_RETRIES + 1):
+        try:
+            result = agent.invoke(
+                {"messages": messages}, {"recursion_limit": COMPOSER_RECURSION_LIMIT}
+            )
+        except GraphRecursionError as exc:
+            raise RuntimeError(
+                "design composer couldn't produce a valid topology after "
+                f"{COMPOSER_RECURSION_LIMIT} steps"
+            ) from exc
+        topology = result.get("structured_response")
+        if topology is None:
+            raise RuntimeError("design composer finished without a structured topology")
+        topology = TopologyGraph.model_validate(topology)
+        errors = _topology_input_errors(topology, design, capacity_results)
+        if not errors:
+            return topology
+        if attempt == MAX_VALIDATION_RETRIES:
+            raise RuntimeError(f"design composer produced an invalid topology: {errors}")
+        messages = result["messages"] + [{
+            "role": "user",
+            "content": f"Correct these topology errors and return the full graph: {errors}",
+        }]

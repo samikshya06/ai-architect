@@ -30,6 +30,7 @@ dependencies = [
     "qdrant-client>=1.19.1",
     "scikit-learn>=1.9.1",
     "numpy>=2.5.4",
+    "ijson>=3.3.0",
 ]
 [tool.poetry]
 package-mode = false

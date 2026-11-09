@@ -160,16 +160,17 @@ def calculate_capacity(
     assumptions = resolve_assumptions(system_type, supplied)
     for metric in metrics:
         calc = globals()[metric["calc"]](dau, assumptions)
-        results.append(
-            {
-                "thread_id": thread_id,
-                "metric": metric["name"],
-                "value": calc["value"],
-                "unit": calc["unit"],
-                "computed_from": calc["formula"],
-                "drives": metric["drives"],
-            }
-        )
+        row = {
+            "thread_id": thread_id,
+            "metric": metric["name"],
+            "value": calc["value"],
+            "unit": calc["unit"],
+            "computed_from": calc["formula"],
+            "drives": metric["drives"],
+        }
+        if metric["name"] in ("peak_read_qps", "peak_write_qps"):
+            row["item_size_kb"] = assumptions["avg_item_size_kb"]
+        results.append(row)
 
     print("Capacity Calculation Results (JSON):")
     print(json.dumps(results, indent=2, ensure_ascii=False))

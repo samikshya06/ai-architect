@@ -32,3 +32,17 @@ class SizingTable(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rows: list[SizingRow] = Field(min_length=1)
+
+
+class CapacityMetric(BaseModel):
+    """A numeric metric produced by the deterministic capacity calculator."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    thread_id: str
+    metric: str = Field(min_length=1)
+    value: float = Field(ge=0)
+    unit: str = Field(min_length=1)
+    computed_from: str = Field(min_length=1)
+    drives: str = Field(min_length=1)
+    item_size_kb: float | None = Field(default=None, gt=0)

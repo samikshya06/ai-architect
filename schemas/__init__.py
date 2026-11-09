@@ -9,9 +9,9 @@ Modules:
     components.py    ComponentChoices     (component selection agent → cost estimation;
                                            AwsDesign, a per-service union on `service`)
     capacity.py      SizingTable          (capacity modeling agent)
+    topology.py      TopologyGraph        (architecture composer agent)
 Planned:
     cost.py           CostBreakdown        (cost estimation agent)
-    topology.py      TopologyGraph        (architecture composer agent)
     findings.py      Findings             (design critic agent)
 """
 
@@ -32,6 +32,7 @@ from schemas.requirements import (
     RequirementSpec,
     SystemType,
 )
+from schemas.topology import TopologyGraph
 
 __all__ = [
     "ASSUMPTION_KEYS",
@@ -47,5 +48,6 @@ __all__ = [
     "SizingRow",
     "SizingTable",
     "SystemType",
+    "TopologyGraph",
     "unknown_references",
 ]

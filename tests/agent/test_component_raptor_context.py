@@ -192,3 +192,19 @@ def test_structured_response_and_failed_tools_cannot_authorize_aws_citations():
         _design(f"kb:{url}"), RAPTOR_CONTEXT, messages
     )
     assert errors == [f"api: kb:{url}"]
+
+
+def test_mcp_tool_error_text_cannot_authorize_aws_citations():
+    url = "https://docs.aws.amazon.com/service/latest/guide.html"
+    messages = [
+        ToolMessage(
+            content=f"MCP tool error: read_sections: No match; see {url}",
+            tool_call_id="1",
+        )
+    ]
+
+    _, errors = designSupervisor._resolve_kb_references(
+        _design(f"kb:{url}"), RAPTOR_CONTEXT, messages
+    )
+
+    assert errors == [f"api: kb:{url}"]

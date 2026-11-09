@@ -17,7 +17,7 @@ from db_store import DatabaseStore
 from llm.factory import get_llm
 from memory.short_term import ShortTermMemory
 from observability.logger import get_logger
-from schemas import ComponentChoices, RequirementSpec
+from schemas import ComponentChoices, RequirementSpec, TopologyGraph
 
 # CapacitySpec
 
@@ -62,7 +62,7 @@ def _mcp_tool_to_langchain(session: ClientSession, mcp_tool) -> StructuredTool:
         result = await session.call_tool(name=mcp_tool.name, arguments=kwargs)
         text = "".join(c.text for c in result.content if hasattr(c, "text"))
         if result.is_error:
-            raise RuntimeError(f"MCP tool {mcp_tool.name} failed: {text}")
+            return f"MCP tool error: {mcp_tool.name}: {text}"
         return text
 
     return StructuredTool(
@@ -91,6 +91,16 @@ async def build_component_agent():
                 tools=[_mcp_tool_to_langchain(session, t) for t in mcp_tools],
                 response_format=ToolStrategy(ComponentChoices),
             )
+
+
+def build_composer_agent():
+    """Build the topology composer with the configured full-size model."""
+    return create_agent(
+        get_llm(),
+        system_prompt=SYSTEM_PROMPTS["design_composer"],
+        tools=[],
+        response_format=ToolStrategy(TopologyGraph),
+    )
 
 
 def build_capacity_agent(requirement_spec):

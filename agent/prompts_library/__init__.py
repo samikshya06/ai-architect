@@ -283,6 +283,7 @@ Every single component choice must be completely traceable. You must fill out tw
    - `kb:<source>` -> cite the exact `source` filename from a RAPTOR leaf or an exact filename in a summary's `sources` list (e.g., `kb:messaging.md`).
    - `kb:<URL>` -> cite an exact AWS documentation HTTPS URL returned by an MCP tool (e.g., `kb:https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html`).
    - Use RAPTOR nodes first for architecture patterns, system type context, and trade-offs; use the AWS documentation MCP tools to verify AWS-specific service and instance details.
+   - For `read_sections`, use only exact section titles returned by the tool; never guess or paraphrase titles. If a section lookup fails, retry with one or more exact available titles or use `read_documentation` for the full document. Treat MCP tool error text as feedback and continue rather than stopping the design.
    - Only cite retrieved sources or tool-returned URLs; never invent citations or use RAPTOR node IDs as citations. Summary `sources` are contributing documents, not proof that each source individually supports every statement.
 
 ---
@@ -309,8 +310,31 @@ Your output must follow this shape:
   ]
 }
 """
+_COMPOSER_PROMPT = """You are a principal system architect composing an editable,
+directed topology graph from the supplied requirements, capacity metrics, selected AWS
+components, and cost estimate. Use only the selected components for infrastructure.
+Represent each selected component exactly once using its exact component_id; use
+its exact selected service and region on the node. Use external nodes for users or
+external systems, with null component_id, service and region. Use accounting nodes for data_transfer
+cost entries, not as infrastructure or flow endpoints. Do not silently add services,
+instances, replicas, regions or Multi-AZ deployments that were not selected or priced.
+If the selected resources cannot meet a requirement, expose the gap and its cost
+implications in tradeoffs_and_risks rather than pretending it is solved.
+
+Connect nodes with directed data flows and specify the protocol and expected volume.
+For unknown protocols say 'unknown'. Set expected_volume to null when no defensible
+estimate can be made and explain why in volume_explanation. Otherwise state the value,
+unit, calculation or assumption and exact input capacity metric names used. Do not
+present invented traffic splits, cache hit rates or peak estimates as measured facts.
+Discuss read path and cache placement, write path and queue vs direct writes, number
+of availability zones, and primary datastore failover in decisions. State when these
+do not apply or are unknown. Explain tradeoffs, assumptions, and limitations; do not
+claim a partial cost estimate is a complete budget or that unsupported availability
+has been provisioned. Return the complete TopologyGraph structured output."""
+
 SYSTEM_PROMPTS = {
     "requirements": _REQUIREMENTS_PROMPT,
     "capacity_calculator_prompt": _CAPACITY_CALC_PROMPT,
     "components_selection": _COMPONENTS_PROMPT,
+    "design_composer": _COMPOSER_PROMPT,
 }
