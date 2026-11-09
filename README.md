@@ -1,4 +1,4 @@
-# AI Architect
+# AI Architect (Only Backend)
 
 AI Architect turns a system-design request into an AWS component selection, a
 partial cost estimate, and a topology diagram. The workflow runs in this order:
